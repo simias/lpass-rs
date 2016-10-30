@@ -10,7 +10,7 @@ use std::io::Write;
 /// Prompt the user for a yes-or-no question, return `Ok(())` if they
 /// reply "yes", `Err(Error::UserAbort)` if they reply "no". Can also
 /// return an I/O error if reading from the terminal fails somehow.
-pub fn ask_yes_no(default_yes: bool, prompt: &str) -> Result {
+pub fn ask_yes_no(default_yes: bool, prompt: &str) -> Result<()> {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
 

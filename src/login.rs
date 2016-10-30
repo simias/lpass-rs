@@ -1,17 +1,19 @@
 use Result;
 use Error;
 
+use lastpass;
+
 use terminal::ask_yes_no;
 
 use getopts::Matches;
 
-pub fn login(options: &Matches) -> Result {
+pub fn login(options: &Matches) -> Result<()> {
 
     let _trust = options.opt_present("t");
     let plaintext_key = options.opt_present("P");
     let force = options.opt_present("f");
 
-    let _login =
+    let login =
         match options.free.get(0) {
             Some(l) => l,
             None => {
@@ -29,6 +31,10 @@ pub fn login(options: &Matches) -> Result {
                          by settting LPASS_AGENT_TIMEOUT=0. Are you sure \
                          you would like to do this?"))
     }
+
+    let iterations = try!(lastpass::iterations(&login));
+
+    info!("{} iterations: {}", login, iterations);
 
     Ok(())
 }

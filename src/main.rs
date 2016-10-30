@@ -1,12 +1,23 @@
+#[macro_use]
+extern crate log;
 extern crate libc;
 extern crate getopts;
+extern crate curl;
+extern crate env_logger;
 
 use std::io;
+use std::num;
+use std::string;
+use std::fmt;
 
 use getopts::{Options, Matches};
 
+use terminal::{color, Color};
+
 mod terminal;
 mod login;
+mod http;
+mod lastpass;
 
 /// Version of lastpas-rs set in Cargo.toml
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -19,10 +30,12 @@ fn main() {
         libc::umask(0o077);
     }
 
+    env_logger::init().unwrap();
+
     // Default to have colored output if stdout is a terminal
     terminal::set_color_mode(terminal::ColorMode::Auto);
 
-    // TODO: http_init
+    http::init();
 
     // TODO: load_saved_environment
 
@@ -39,7 +52,10 @@ fn main() {
         match res {
             Ok(_) => 0,
             Err(e) => {
-                println!("Command failed: {:?}", e);
+                println!("{}Command failed{}: {}",
+                         color(Color::FgRed),
+                         color(Color::Reset),
+                         e);
 
                 1
             }
@@ -75,7 +91,7 @@ fn command_help(exe: &str, command: &Command) {
     println!("{}", opts.usage(&cmd));
 }
 
-fn process_command(args: &[String]) -> Result {
+fn process_command(args: &[String]) -> Result<()> {
     let exe = &args[0];
     let command = &args[1];
     let options = &args[2..];
@@ -100,7 +116,7 @@ fn process_command(args: &[String]) -> Result {
     Err(Error::BadUsage)
 }
 
-fn run_command(command: &Command, options: &[String]) -> Result {
+fn run_command(command: &Command, options: &[String]) -> Result<()> {
     match command.options().parse(options) {
         Ok(matches) => {
             if let Some(mode) = matches.opt_str("C") {
@@ -128,7 +144,7 @@ fn run_command(command: &Command, options: &[String]) -> Result {
     }
 }
 
-fn global_options(args: &[String]) -> Result {
+fn global_options(args: &[String]) -> Result<()> {
     let exe = &args[0];
 
     let mut opts = Options::new();
@@ -160,7 +176,7 @@ fn global_options(args: &[String]) -> Result {
     }
 }
 
-pub type Result = std::result::Result<(), Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
@@ -170,11 +186,47 @@ pub enum Error {
     UserAbort,
     /// Input/output error
     IoError(io::Error),
+    /// CURL library error
+    CurlError(curl::Error),
+    /// HTTP request didn't receive a 200 response
+    HttpError(u32),
+    /// String to integer conversion failed
+    ParseIntError(num::ParseIntError),
+    /// String conversion failed
+    Utf8Error(string::FromUtf8Error),
 }
 
 impl ::std::convert::From<io::Error> for Error {
     fn from(e: io::Error) -> Error {
         Error::IoError(e)
+    }
+}
+
+impl ::std::convert::From<curl::Error> for Error {
+    fn from(e: curl::Error) -> Error {
+        Error::CurlError(e)
+    }
+}
+
+impl ::std::convert::From<num::ParseIntError> for Error {
+    fn from(e: num::ParseIntError) -> Error {
+        Error::ParseIntError(e)
+    }
+}
+
+impl ::std::convert::From<string::FromUtf8Error> for Error {
+    fn from(e: string::FromUtf8Error) -> Error {
+        Error::Utf8Error(e)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &Error::CurlError(ref e) =>
+                write!(f, "CURL library error: {}", e),
+            e => write!(f, "{:?}", e)
+        }
     }
 }
 
@@ -200,7 +252,7 @@ pub struct Command {
     /// Description of the free arguments
     free_args: &'static str,
     /// Command implementation
-    command: fn(&Matches) -> Result,
+    command: fn(&Matches) -> Result<()>,
 }
 
 impl Command {
