@@ -1,0 +1,8 @@
+[package]
+name = "lpass-rs"
+version = "0.1.0"
+authors = ["Lionel Flandrin <lionel@svkt.org>"]
+
+[dependencies]
+libc = "0.2.17"
+getopts = "0.2.14"
