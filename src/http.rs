@@ -5,90 +5,97 @@ use std::result;
 use libc::c_void;
 use curl;
 use openssl::{ssl, x509};
+use openssl::types::Ref;
 use openssl::hash::{Hasher, MessageDigest};
 use base64;
+
+pub fn init() {
+    curl::init();
+}
 
 pub struct Session {
     /// Server name (e.g. "lastpass.com")
     server: String,
 }
 
-pub fn init() {
-    curl::init();
-}
+impl Session {
+    pub fn new(server: String) -> Session {
+        Session {
+            server: server,
+        }
+    }
 
-/// Perform a POST requests to `page` using the post fields
-/// `params`. Returns a `Vec` containing
-/// the response data or an `Error` if something goes wrong.
-pub fn post(page: &str,
-            session: Option<Session>,
-            params: &[(&str, &str)]) -> Result<Vec<u8>> {
+    fn server(&self) -> &str {
+        &self.server
+    }
 
-    let login_server =
-        match session {
-            Some(s) => s.server.clone(),
-            None => LASTPASS_SERVER.to_owned(),
-        };
+    /// Perform a POST requests to `page` using the post fields
+    /// `params`. Returns a `Vec` containing the response data or an
+    /// `Error` if something goes wrong.
+    pub fn post(&self,
+                page: &str,
+                params: &[(&str, &str)]) -> Result<Vec<u8>> {
 
-    let url = format!("https://{}/{}", login_server, page);
+        let url = format!("https://{}/{}", self.server(), page);
 
-    debug!("POST request to {}", url);
+        debug!("POST request to {}", url);
 
-    let mut request = curl::easy::Easy::new();
+        let mut request = curl::easy::Easy::new();
 
-    // URL-encode `params`
-    let mut post = String::new();
+        // URL-encode `params`
+        let mut post = String::new();
 
-    for &(k, v) in params {
-        if !post.is_empty() {
-            post.push('&');
+        for &(k, v) in params {
+            if !post.is_empty() {
+                post.push('&');
+            }
+
+            let k = request.url_encode(k.as_bytes());
+            let v = request.url_encode(v.as_bytes());
+
+            post += &format!("{}={}", k, v);
         }
 
-        let k = request.url_encode(k.as_bytes());
-        let v = request.url_encode(v.as_bytes());
+        // Build the POST request
+        try!(request.url(&url));
+        try!(request.useragent(&format!("LPass-rs-CLI/{}", ::VERSION)));
+        try!(request.ssl_verify_host(true));
+        try!(request.ssl_verify_peer(true));
 
-        post += &format!("{}={}", k, v);
-    }
+        try!(request.ssl_ctx_function(validate_certificate));
 
-    // Build the POST request
-    try!(request.url(&url));
-    try!(request.useragent(&format!("LPass-rs-CLI/{}", ::VERSION)));
-    try!(request.ssl_verify_host(true));
-    try!(request.ssl_verify_peer(true));
+        try!(request.fail_on_error(true));
+        try!(request.progress(false));
 
-    try!(request.ssl_ctx_function(validate_certificate));
+        // TODO: http.c uses the progress function to check for
+        // interrupt, do we want to do that?
 
-    try!(request.fail_on_error(true));
-    try!(request.progress(false));
+        if !post.is_empty() {
+            try!(request.post_fields_copy(post.as_bytes()));
+        }
 
-    // TODO: http.c uses the progress function to check for interrupt,
-    // do we want to do that?
+        // TODO: handle session
 
-    if !post.is_empty() {
-        try!(request.post_fields_copy(post.as_bytes()));
-    }
+        let mut received = Vec::new();
 
-    // TODO: handle session
+        {
+            let mut transfer = request.transfer();
 
-    let mut received = Vec::new();
+            try!(transfer.write_function(|data| {
+                received.extend_from_slice(data);
+                Ok(data.len())
+            }));
 
-    {
-        let mut transfer = request.transfer();
+            try!(transfer.perform());
+        }
 
-        try!(transfer.write_function(|data| {
-            received.extend_from_slice(data);
-            Ok(data.len())
-        }));
+        let response_code = try!(request.response_code());
 
-        try!(transfer.perform());
-    }
-
-    let response_code = try!(request.response_code());
-
-    if response_code != 200 {
-        Err(Error::HttpError(response_code))
-    } else {
-        Ok(received)
+        if response_code != 200 {
+            Err(Error::HttpError(response_code))
+        } else {
+            Ok(received)
+        }
     }
 }
 
@@ -98,7 +105,7 @@ fn validate_certificate(ssl_ctx: *mut c_void) -> result::Result<(), curl::Error>
     // XXX Is it safe to assume that this is an OpenSSL context? The C
     // code seems to think so but the doc is a bit more ambiguous.
     let mut ctx = unsafe {
-        // XXX `SslContextBuilder` assumes it own the context but it
+        // XXX `SslContextBuilder` assumes it owns the context but it
         // doesn't here. Make sure to `forget` it when we're done with
         // it.
         ssl::SslContextBuilder::from_ptr(ssl_ctx as *mut _)
@@ -116,7 +123,7 @@ fn validate_certificate(ssl_ctx: *mut c_void) -> result::Result<(), curl::Error>
 }
 
 fn verify_pinned_certificate(preverify_ok: bool,
-                             store: &x509::X509StoreContextRef) -> bool {
+                             store: &Ref<x509::X509StoreContext>) -> bool {
     if !preverify_ok {
         return false;
     }
@@ -160,9 +167,6 @@ fn verify_pinned_certificate(preverify_ok: bool,
     debug!("No pinned certificate found in certificate chain, aborting");
     false
 }
-
-/// Domain name of the lastpass server
-static LASTPASS_SERVER: &'static str = "lastpass.com";
 
 /// List of the base64-encoded SHA256 public key signatures for the
 /// pinned certificates. Lifted straight from the C client.

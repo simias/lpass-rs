@@ -1,8 +1,9 @@
 use Result;
 use Error;
+use CommandOption;
 
+use http;
 use lastpass;
-
 use terminal::ask_yes_no;
 
 use getopts::Matches;
@@ -32,14 +33,17 @@ pub fn login(options: &Matches) -> Result<()> {
                          you would like to do this?"))
     }
 
-    let iterations = try!(lastpass::iterations(&login));
+    let session = http::Session::new(LASTPASS_SERVER.to_owned());
 
-    info!("{} iterations: {}", login, iterations);
+    let iterations = try!(lastpass::iterations(&session, &login));
+
+    debug!("Iterations for {}: {}", login, iterations);
 
     Ok(())
 }
 
-use CommandOption;
+/// Domain name of the lastpass server
+static LASTPASS_SERVER: &'static str = "lastpass.com";
 
 pub const LOGIN_COMMAND: ::Command = ::Command {
     name: "login",

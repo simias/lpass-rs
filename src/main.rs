@@ -5,9 +5,6 @@ extern crate getopts;
 extern crate curl;
 extern crate env_logger;
 extern crate openssl;
-// I could use OpenSSL for base64 but at the moment rust-openssl
-// doesn't support it and the rust crate is a bit more convenient to
-// use anyway...
 extern crate base64;
 
 use std::io;

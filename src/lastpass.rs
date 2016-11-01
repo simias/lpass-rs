@@ -8,11 +8,11 @@ use std::str::FromStr;
 use http;
 
 /// Return the number of iterations for `login`
-pub fn iterations(login: &str) -> Result<u32> {
+pub fn iterations(session: &http::Session, login: &str) -> Result<u32> {
     let login = login.to_lowercase();
 
     let response =
-        try!(http::post("iterations.php", None, &[("email", &login)]));
+        try!(session.post("iterations.php", &[("email", &login)]));
 
     let s = try!(String::from_utf8(response));
 
