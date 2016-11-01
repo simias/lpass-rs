@@ -1,7 +1,6 @@
 /// Terminal-specific handling
 
-use Result;
-use Error;
+use lpass::{Result, Error};
 
 use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT, Ordering};
 use std::io;

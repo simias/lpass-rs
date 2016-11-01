@@ -9,10 +9,6 @@ use openssl::types::Ref;
 use openssl::hash::{Hasher, MessageDigest};
 use base64;
 
-pub fn init() {
-    curl::init();
-}
-
 pub struct Session {
     /// Server name (e.g. "lastpass.com")
     server: String,
@@ -20,6 +16,8 @@ pub struct Session {
 
 impl Session {
     pub fn new(server: String) -> Session {
+        curl::init();
+
         Session {
             server: server,
         }

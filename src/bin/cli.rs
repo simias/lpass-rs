@@ -1,28 +1,17 @@
 #[macro_use]
 extern crate log;
 extern crate libc;
-extern crate getopts;
-extern crate curl;
 extern crate env_logger;
-extern crate openssl;
-extern crate base64;
-
-use std::io;
-use std::num;
-use std::string;
-use std::fmt;
+extern crate lpass;
+extern crate getopts;
 
 use getopts::{Options, Matches};
+use lpass::{Result, Error};
 
 use terminal::{color, Color};
 
 mod terminal;
-mod login;
-mod http;
-mod lastpass;
-
-/// Version of lastpas-rs set in Cargo.toml
-pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+mod commands;
 
 fn main() {
     // Do not remove this umask. Always keep at top.
@@ -36,8 +25,6 @@ fn main() {
 
     // Default to have colored output if stdout is a terminal
     terminal::set_color_mode(terminal::ColorMode::Auto);
-
-    http::init();
 
     // TODO: load_saved_environment
 
@@ -67,7 +54,7 @@ fn main() {
 }
 
 fn version() {
-    println!("LPass-rs CLI v{}", VERSION);
+    println!("LPass-rs CLI v{}", lpass::VERSION);
 }
 
 fn help(exe: &str) {
@@ -178,60 +165,6 @@ fn global_options(args: &[String]) -> Result<()> {
     }
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
-
-#[derive(Debug)]
-pub enum Error {
-    /// Command usage error
-    BadUsage,
-    /// User aborted the command
-    UserAbort,
-    /// Input/output error
-    IoError(io::Error),
-    /// CURL library error
-    CurlError(curl::Error),
-    /// HTTP request didn't receive a 200 response
-    HttpError(u32),
-    /// String to integer conversion failed
-    ParseIntError(num::ParseIntError),
-    /// String conversion failed
-    Utf8Error(string::FromUtf8Error),
-}
-
-impl ::std::convert::From<io::Error> for Error {
-    fn from(e: io::Error) -> Error {
-        Error::IoError(e)
-    }
-}
-
-impl ::std::convert::From<curl::Error> for Error {
-    fn from(e: curl::Error) -> Error {
-        Error::CurlError(e)
-    }
-}
-
-impl ::std::convert::From<num::ParseIntError> for Error {
-    fn from(e: num::ParseIntError) -> Error {
-        Error::ParseIntError(e)
-    }
-}
-
-impl ::std::convert::From<string::FromUtf8Error> for Error {
-    fn from(e: string::FromUtf8Error) -> Error {
-        Error::Utf8Error(e)
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Error::CurlError(ref e) =>
-                write!(f, "CURL library error: {}", e),
-            e => write!(f, "{:?}", e)
-        }
-    }
-}
-
 struct CommandOption {
     /// Short option name (i.e. "h" for "-h", "" for none)
     short_name: &'static str,
@@ -285,5 +218,5 @@ impl Command {
 }
 
 static COMMANDS: [Command; 1] = [
-    login::LOGIN_COMMAND,
+    commands::login::LOGIN_COMMAND,
 ];
