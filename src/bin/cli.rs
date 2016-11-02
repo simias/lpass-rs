@@ -12,6 +12,7 @@ use terminal::{color, Color};
 
 mod terminal;
 mod commands;
+mod password;
 
 fn main() {
     // Do not remove this umask. Always keep at top.

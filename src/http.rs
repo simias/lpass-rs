@@ -23,6 +23,10 @@ impl Session {
         }
     }
 
+    pub fn is_authenticated(&self) -> bool {
+        false
+    }
+
     fn server(&self) -> &str {
         &self.server
     }

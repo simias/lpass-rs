@@ -4,6 +4,7 @@ use lpass;
 use CommandOption;
 
 use terminal::ask_yes_no;
+use password;
 
 use getopts::Matches;
 
@@ -64,6 +65,17 @@ pub fn login(options: &Matches) -> Result<()> {
     let iterations = try!(lpass::iterations(&session, &login));
 
     debug!("Iterations for {}: {}", login, iterations);
+
+    let desc = format!("Please enter the master password for <{}>", login);
+
+    while !session.is_authenticated() {
+        let password =
+            try!(password::prompt("Master password", &desc, None));
+
+        println!("Got {}", String::from_utf8_lossy(&password));
+
+        break;
+    }
 
     Ok(())
 }
