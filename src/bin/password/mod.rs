@@ -4,9 +4,12 @@ use std::io;
 use std::io::{Read, Write};
 
 use lpass::{Result, Error};
+use lpass::SecureStorage;
 
 /// Prompt the user for a password
-pub fn prompt(prompt: &str, desc: &str, error: Option<&str>) -> Result<Vec<u8>> {
+pub fn prompt(prompt: &str,
+              desc: &str,
+              error: Option<&str>) -> Result<SecureStorage> {
     // XXX Implement fallback using the terminal and
     // LPASS_DISABLE_PINENTRY
 
@@ -36,11 +39,10 @@ pub fn prompt(prompt: &str, desc: &str, error: Option<&str>) -> Result<Vec<u8>> 
 fn pinentry_proto(pinentry: &mut process::Child,
                   prompt: &str,
                   desc: &str,
-                  error: Option<&str>) -> Result<Vec<u8>> {
+                  error: Option<&str>) -> Result<SecureStorage> {
 
-    let bad_proto = io::Error::new(io::ErrorKind::Other,
-                                   "Pinentry protocol error");
-    let bad_proto = Err(Error::IoError(bad_proto));
+    let bad_proto = Err(io::Error::new(io::ErrorKind::Other,
+                                       "Pinentry protocol error").into());
 
     try!(expect_ok(pinentry));
 
@@ -70,9 +72,13 @@ fn pinentry_proto(pinentry: &mut process::Child,
     match &password[0..2] {
         b"D " => {
             try!(expect_ok(pinentry));
-            Ok(password[2..].to_owned())
+
+            let password = password[2..].to_owned();
+
+            SecureStorage::from_vec(password)
         }
-        b"OK" => Ok(Vec::new()),
+        // Empty/no password
+        b"OK" => Ok(SecureStorage::new()),
         _ => bad_proto,
     }
 }

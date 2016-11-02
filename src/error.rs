@@ -6,6 +6,7 @@ use std::string;
 use std::result;
 
 use curl;
+use openssl;
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -19,14 +20,13 @@ pub enum Error {
     IoError(io::Error),
     /// CURL library error
     CurlError(curl::Error),
+    /// OpenSSL library error
+    OpensslError(openssl::error::ErrorStack),
     /// HTTP request didn't receive a 200 response
     HttpError(u32),
-    /// String to integer conversion failed
-    ParseIntError(num::ParseIntError),
-    /// String conversion failed
-    Utf8Error(string::FromUtf8Error),
+    /// A server reply didn't make sense
+    BadProtocol(String),
 }
-
 
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Error {
@@ -41,14 +41,20 @@ impl From<curl::Error> for Error {
 }
 
 impl From<num::ParseIntError> for Error {
-    fn from(e: num::ParseIntError) -> Error {
-        Error::ParseIntError(e)
+    fn from(_: num::ParseIntError) -> Error {
+        Error::BadProtocol("Integer conversion failed".to_owned())
     }
 }
 
 impl From<string::FromUtf8Error> for Error {
-    fn from(e: string::FromUtf8Error) -> Error {
-        Error::Utf8Error(e)
+    fn from(_: string::FromUtf8Error) -> Error {
+        Error::BadProtocol("Non-UTF8 string received".to_owned())
+    }
+}
+
+impl From<openssl::error::ErrorStack> for Error {
+    fn from(e: openssl::error::ErrorStack) -> Error {
+        Error::OpensslError(e)
     }
 }
 
@@ -57,6 +63,8 @@ impl fmt::Display for Error {
         match self {
             &Error::CurlError(ref e) =>
                 write!(f, "CURL library error: {}", e),
+            &Error::BadProtocol(ref e) =>
+                write!(f, "Protocol error: {}", e),
             e => write!(f, "{:?}", e)
         }
     }

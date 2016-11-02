@@ -9,12 +9,16 @@ extern crate libc;
 
 mod http;
 mod error;
+mod secure;
+
+pub mod kdf;
 
 use std::u32;
 use std::str::FromStr;
 
 pub use http::Session;
 pub use error::{Result, Error};
+pub use secure::Storage as SecureStorage;
 
 /// Version of lpass-rs set in Cargo.toml
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");

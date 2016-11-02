@@ -72,7 +72,11 @@ pub fn login(options: &Matches) -> Result<()> {
         let password =
             try!(password::prompt("Master password", &desc, None));
 
-        println!("Got {}", String::from_utf8_lossy(&password));
+
+        let _key =
+            try!(lpass::kdf::login_key(&login, &password, iterations));
+
+        // Convert into hex
 
         break;
     }
