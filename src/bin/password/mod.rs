@@ -78,7 +78,7 @@ fn pinentry_proto(pinentry: &mut process::Child,
             SecureStorage::from_vec(password)
         }
         // Empty/no password
-        b"OK" => Ok(SecureStorage::new()),
+        b"OK" => Ok(SecureStorage::empty()),
         _ => bad_proto,
     }
 }

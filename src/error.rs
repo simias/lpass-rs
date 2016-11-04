@@ -8,8 +8,10 @@ use std::result;
 use curl;
 use openssl;
 
+/// Specialized `Result` type for the lpass API
 pub type Result<T> = result::Result<T, Error>;
 
+/// Error type returned by the lpass API.
 #[derive(Debug)]
 pub enum Error {
     /// Command usage error

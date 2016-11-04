@@ -37,7 +37,7 @@ pub const LOGIN_COMMAND: ::Command = ::Command {
 
 pub fn login(options: &Matches) -> Result<()> {
 
-    let _trust = options.opt_present("t");
+    let trust = options.opt_present("t");
     let plaintext_key = options.opt_present("P");
     let force = options.opt_present("f");
 
@@ -60,11 +60,7 @@ pub fn login(options: &Matches) -> Result<()> {
                          you would like to do this?"))
     }
 
-    let session = lpass::Session::new(LASTPASS_SERVER.to_owned());
-
-    let iterations = try!(lpass::iterations(&session, &login));
-
-    debug!("Iterations for {}: {}", login, iterations);
+    let mut session = lpass::Session::new(&login);
 
     let desc = format!("Please enter the master password for <{}>", login);
 
@@ -72,17 +68,10 @@ pub fn login(options: &Matches) -> Result<()> {
         let password =
             try!(password::prompt("Master password", &desc, None));
 
-
-        let _key =
-            try!(lpass::kdf::login_key(&login, &password, iterations));
-
-        // Convert into hex
+        try!(session.login(password, trust));
 
         break;
     }
 
     Ok(())
 }
-
-/// Domain name of the lastpass server
-static LASTPASS_SERVER: &'static str = "lastpass.com";

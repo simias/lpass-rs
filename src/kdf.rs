@@ -9,9 +9,10 @@ use openssl::hash::MessageDigest;
 
 /// Key derivation function used to generate the login key (the one
 /// sent to the server)
-pub fn login_key(login: &str,
-                 password: &SecureStorage,
+pub fn login_key(username: &str,
+                 password: &[u8],
                  iterations: u32) -> Result<SecureStorage> {
+
     // The C client doesn't do that but it's probably not a good idea
     // to work with a very low number of iterations. The C client has
     // a special KDF implementation when iterations == 1, so look
@@ -24,8 +25,8 @@ pub fn login_key(login: &str,
 
     let mut temp = try!(SecureStorage::from_vec(vec![0; 32]));
 
-    try!(pkcs5::pbkdf2_hmac(&password,
-                            login.as_bytes(),
+    try!(pkcs5::pbkdf2_hmac(password,
+                            username.as_bytes(),
                             iterations as usize,
                             MessageDigest::sha256(),
                             &mut temp));
@@ -33,7 +34,7 @@ pub fn login_key(login: &str,
     let mut key = try!(SecureStorage::from_vec(vec![0; 32]));
 
     try!(pkcs5::pbkdf2_hmac(&temp,
-                            &password,
+                            password,
                             1,
                             MessageDigest::sha256(),
                             &mut key));

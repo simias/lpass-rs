@@ -9,95 +9,72 @@ use openssl::types::Ref;
 use openssl::hash::{Hasher, MessageDigest};
 use base64;
 
-pub struct Session {
-    /// Server name (e.g. "lastpass.com")
-    server: String,
-}
+/// Perform a POST requests to `page` using the post fields
+/// `params`. Returns a `Vec` containing the response data or an
+/// `Error` if something goes wrong.
+pub fn post(server: &str,
+            page: &str,
+            params: &[(&[u8], &[u8])]) -> Result<Vec<u8>> {
 
-impl Session {
-    pub fn new(server: String) -> Session {
-        curl::init();
+    let url = format!("https://{}/{}", server, page);
 
-        Session {
-            server: server,
-        }
-    }
+    debug!("POST request to {}", url);
 
-    pub fn is_authenticated(&self) -> bool {
-        false
-    }
+    let mut request = curl::easy::Easy::new();
 
-    fn server(&self) -> &str {
-        &self.server
-    }
+    // URL-encode `params`
+    let mut post = String::new();
 
-    /// Perform a POST requests to `page` using the post fields
-    /// `params`. Returns a `Vec` containing the response data or an
-    /// `Error` if something goes wrong.
-    pub fn post(&self,
-                page: &str,
-                params: &[(&str, &str)]) -> Result<Vec<u8>> {
-
-        let url = format!("https://{}/{}", self.server(), page);
-
-        debug!("POST request to {}", url);
-
-        let mut request = curl::easy::Easy::new();
-
-        // URL-encode `params`
-        let mut post = String::new();
-
-        for &(k, v) in params {
-            if !post.is_empty() {
-                post.push('&');
-            }
-
-            let k = request.url_encode(k.as_bytes());
-            let v = request.url_encode(v.as_bytes());
-
-            post += &format!("{}={}", k, v);
-        }
-
-        // Build the POST request
-        try!(request.url(&url));
-        try!(request.useragent(&format!("LPass-rs-CLI/{}", ::VERSION)));
-        try!(request.ssl_verify_host(true));
-        try!(request.ssl_verify_peer(true));
-
-        try!(request.ssl_ctx_function(validate_certificate));
-
-        try!(request.fail_on_error(true));
-        try!(request.progress(false));
-
-        // TODO: http.c uses the progress function to check for
-        // interrupt, do we want to do that?
-
+    for &(k, v) in params {
         if !post.is_empty() {
-            try!(request.post_fields_copy(post.as_bytes()));
+            post.push('&');
         }
 
-        // TODO: handle session
+        let k = request.url_encode(k);
+        let v = request.url_encode(v);
 
-        let mut received = Vec::new();
+        post += &format!("{}={}", k, v);
+    }
 
-        {
-            let mut transfer = request.transfer();
+    // Build the POST request
+    try!(request.url(&url));
+    try!(request.useragent(&format!("LPass-rs-CLI/{}", ::VERSION)));
+    try!(request.ssl_verify_host(true));
+    try!(request.ssl_verify_peer(true));
 
-            try!(transfer.write_function(|data| {
-                received.extend_from_slice(data);
-                Ok(data.len())
-            }));
+    try!(request.ssl_ctx_function(validate_certificate));
 
-            try!(transfer.perform());
-        }
+    try!(request.fail_on_error(true));
+    try!(request.progress(false));
 
-        let response_code = try!(request.response_code());
+    // TODO: http.c uses the progress function to check for
+    // interrupt, do we want to do that?
 
-        if response_code != 200 {
-            Err(Error::HttpError(response_code))
-        } else {
-            Ok(received)
-        }
+    if !post.is_empty() {
+        try!(request.post_fields_copy(post.as_bytes()));
+    }
+
+    // TODO: handle session
+
+    let mut received = Vec::new();
+
+    {
+        let mut transfer = request.transfer();
+
+        try!(transfer.write_function(|data| {
+            received.extend_from_slice(data);
+            Ok(data.len())
+        }));
+
+        try!(transfer.perform());
+    }
+
+    let response_code = try!(request.response_code());
+
+    if response_code != 200 {
+        Err(Error::HttpError(response_code))
+    } else {
+        Ok(received)
     }
 }
 
