@@ -21,14 +21,26 @@ impl Storage {
         }
     }
 
+    /// Build a storage by copying the contents of a slice.
+    pub fn from_slice(s: &[u8]) -> Result<Storage> {
+        let mut st =
+            try!(Storage::from_vec(vec![0; s.len()]));
+
+        for (i, b) in s.iter().enumerate() {
+            st[i] = *b;
+        }
+
+        Ok(st)
+    }
+
     /// Build a `Storage` with the given capacity.
     pub fn with_capacity(capacity: usize) -> Result<Storage> {
-        let mut v =
+        let mut s =
             try!(Storage::from_vec(vec![0; capacity]));
 
-        v.len = 0;
+        s.len = 0;
 
-        Ok(v)
+        Ok(s)
     }
 
     /// Convert a Vec into a secure `Storage`. Fails if we can't lock

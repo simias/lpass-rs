@@ -9,6 +9,8 @@ use curl;
 use openssl;
 use xml_sax::reader as xml_reader;
 
+use OtpMethod;
+
 /// Specialized `Result` type for the lpass API
 pub type Result<T> = result::Result<T, Error>;
 
@@ -19,6 +21,12 @@ pub enum Error {
     BadUsage,
     /// User aborted the command
     UserAbort,
+    /// Bad password
+    InvalidPassword,
+    /// Bad username
+    InvalidUser,
+    /// Action failed because OTP auth is required
+    OtpRequired(OtpMethod),
     /// Input/output error
     IoError(io::Error),
     /// CURL library error
@@ -29,6 +37,8 @@ pub enum Error {
     HttpError(u32),
     /// A server reply didn't make sense
     BadProtocol(String),
+    /// We encountered a valid but unsupported action
+    Unsupported(String),
     /// Server returned an invalid XML
     XmlError(xml_reader::Error),
 }
@@ -76,6 +86,8 @@ impl fmt::Display for Error {
                 write!(f, "CURL library error: {}", e),
             &Error::BadProtocol(ref e) =>
                 write!(f, "Protocol error: {}", e),
+            &Error::Unsupported(ref e) =>
+                write!(f, "Unsupported: {}", e),
             &Error::XmlError(ref e) =>
                 write!(f, "Received invalid XML: {}", e),
             e => write!(f, "{:?}", e)

@@ -68,10 +68,30 @@ pub fn login(options: &Matches) -> Result<()> {
         let password =
             try!(password::prompt("Master password", &desc, None));
 
-        try!(session.login(password, trust));
+        try!(session.login(password, trust, otp_query));
 
         break;
     }
 
     Ok(())
+}
+
+fn otp_query(method: lpass::OtpMethod) -> Option<lpass::SecureStorage> {
+
+    let desc = format!("Please provide your {} OTP", method);
+
+    match password::prompt("Two factor authentication", &desc, None) {
+        Ok(otp) => {
+            if otp.is_empty() {
+                println!("No OTP provided");
+                None
+            } else {
+                Some(otp)
+            }
+        }
+        Err(e) => {
+            println!("Error while prompting for OTP: {}", e);
+            None
+        }
+    }
 }

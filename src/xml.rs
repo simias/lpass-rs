@@ -127,7 +127,7 @@ impl Dom {
         Ok(element_stack.pop().unwrap())
     }
 
-    /// Get the elemetn at `path` or `None` if the path leads nowhere.
+    /// Get the element at `path` or `None` if the path leads nowhere.
     pub fn element(&self, path: &[&str]) -> Option<&Element> {
         let mut cur = &self.root;
 

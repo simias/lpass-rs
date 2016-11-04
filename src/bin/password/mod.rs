@@ -69,13 +69,17 @@ fn pinentry_proto(pinentry: &mut process::Child,
         return bad_proto;
     }
 
+    if password.len() >= 12 && &password[0..12] == b"ERR 83886179" {
+        // This weird code denotes that the user canceled the
+        // operation
+        return Err(Error::UserAbort);
+    }
+
     match &password[0..2] {
         b"D " => {
             try!(expect_ok(pinentry));
 
-            let password = password[2..].to_owned();
-
-            SecureStorage::from_vec(password)
+            SecureStorage::from_slice(&password[2..])
         }
         // Empty/no password
         b"OK" => Ok(SecureStorage::empty()),
