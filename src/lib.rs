@@ -8,10 +8,12 @@ extern crate curl;
 extern crate openssl;
 extern crate base64;
 extern crate libc;
+extern crate xml as xml_sax;
 
 mod http;
 mod error;
 mod secure;
+mod xml;
 
 pub mod kdf;
 
@@ -138,6 +140,9 @@ impl Session {
 
         let response =
             try!(self.post("login.php", params));
+
+        let xml =
+            try!(xml::Dom::parse(&response as &[u8]));
 
         println!("{}", String::from_utf8_lossy(&response));
 
