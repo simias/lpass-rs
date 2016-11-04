@@ -7,12 +7,28 @@ use error::Result;
 
 /// Secure storage using `mlock` to avoid sensitive data being
 /// swapped.
-pub struct Storage(Box<[u8]>);
+pub struct Storage {
+    storage: Box<[u8]>,
+    len: usize,
+}
 
 impl Storage {
     /// Create a new empty `Storage`.
     pub fn empty() -> Storage {
-        Storage(Box::new([]))
+        Storage {
+            storage: Box::new([]),
+            len: 0,
+        }
+    }
+
+    /// Build a `Storage` with the given capacity.
+    pub fn with_capacity(capacity: usize) -> Result<Storage> {
+        let mut v =
+            try!(Storage::from_vec(vec![0; capacity]));
+
+        v.len = 0;
+
+        Ok(v)
     }
 
     /// Convert a Vec into a secure `Storage`. Fails if we can't lock
@@ -24,39 +40,57 @@ impl Storage {
     /// Convert a boxed slice into a secure `Storage`. Fails if we
     /// can't lock the memory.
     pub fn from_buf(buf: Box<[u8]>) -> Result<Storage> {
-        if buf.len() > 0 {
-            let ret =
-                unsafe {
-                    libc::mlock(buf.as_ptr() as *const _,
-                                buf.len() as _)
+        try!(mlock(&*buf));
+
+        Ok(Storage{
+            len: buf.len(),
+            storage: buf,
+        })
+    }
+
+    /// Push a new byte into the `Storage`, reallocating if the
+    /// capacity is insufficient
+    pub fn push(&mut self, b: u8) -> Result<()> {
+        if self.len == self.storage.len() {
+            // Need to reallocate
+            let new_capacity =
+                match self.len {
+                    0 => 32,
+                    n => n * 2,
                 };
 
-            if ret < 0 {
-                error!("mlock failed, can't lock memory pages!");
-                return Err(io::Error::last_os_error().into())
-            }
+            try!(self.reallocate(new_capacity));
         }
 
-        Ok(Storage(buf))
+        self.storage[self.len] = b;
+
+        self.len += 1;
+
+        Ok(())
+    }
+
+    fn reallocate(&mut self, new_capacity: usize) -> Result<()> {
+        assert!(new_capacity > self.storage.len());
+
+        let mut new = vec![0; new_capacity].into_boxed_slice();
+
+        try!(mlock(&*new));
+
+        for (i, &b) in self.storage.iter().enumerate() {
+            new[i] = b;
+        }
+
+        munlock(&mut *self.storage);
+
+        self.storage = new;
+
+        Ok(())
     }
 }
 
 impl Drop for Storage {
     fn drop(&mut self) {
-        // Clear the memory before we unlock it. Since we pass the
-        // buffer to `mlock` after that I don't think LLVM will
-        // optimize that away.
-        for b in self.iter_mut() {
-            *b = 0;
-        }
-
-        // We can't do much if this call fails so let's just ignore
-        // errors.
-        let _ =
-            unsafe {
-                libc::munlock(self.as_ptr() as *const _,
-                              self.len() as _)
-            };
+        munlock(&mut *self.storage);
     }
 }
 
@@ -64,12 +98,51 @@ impl Deref for Storage {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        &*self.0
+        &self.storage[0..self.len]
     }
 }
 
 impl DerefMut for Storage {
     fn deref_mut(&mut self) -> &mut [u8] {
-        &mut *self.0
+        &mut self.storage[0..self.len]
     }
+}
+
+fn mlock(s: &[u8]) -> Result<()> {
+    if s.is_empty() {
+        return Ok(());
+    }
+
+    let ret =
+        unsafe {
+            libc::mlock(s.as_ptr() as *const _,
+                        s.len() as _)
+        };
+
+    if ret < 0 {
+        error!("mlock failed, can't lock memory pages!");
+        Err(io::Error::last_os_error().into())
+    } else {
+        Ok(())
+    }
+}
+
+fn munlock(s: &mut [u8]) {
+    if s.is_empty() {
+        return;
+    }
+
+    // Clear the memory before we unlock it. Since we pass the buffer
+    // to `mlock` after that LLVM shouldn't optimize that away.
+    for b in s.iter_mut() {
+        *b = 0;
+    }
+
+    // We can't do much if this call fails so let's just ignore
+    // errors.
+    let _ =
+        unsafe {
+            libc::munlock(s.as_ptr() as *const _,
+                          s.len() as _)
+        };
 }

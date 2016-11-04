@@ -96,7 +96,7 @@ fn expect_ok(pinentry: &mut process::Child) -> Result<()> {
     Ok(())
 }
 
-fn read_line(pinentry: &mut process::Child) -> Result<Vec<u8>> {
+fn read_line(pinentry: &mut process::Child) -> Result<SecureStorage> {
     let stdout =
         match pinentry.stdout {
             Some(ref mut s) => s,
@@ -108,7 +108,7 @@ fn read_line(pinentry: &mut process::Child) -> Result<Vec<u8>> {
             }
         };
 
-    let mut line = Vec::with_capacity(32);
+    let mut line = try!(SecureStorage::with_capacity(64));
 
     for b in stdout.bytes() {
         let b = try!(b);
@@ -116,7 +116,7 @@ fn read_line(pinentry: &mut process::Child) -> Result<Vec<u8>> {
         if b == b'\n' {
             break;
         } else {
-            line.push(b);
+            try!(line.push(b));
         }
     }
 
