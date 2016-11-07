@@ -181,7 +181,7 @@ impl Session {
         }
 
         let crypto_key =
-            try!(kdf::decryption_key(&self.username(), &password, iterations));
+            try!(kdf::crypto_key(&self.username(), &password, iterations));
 
         self.crypto_key = Some(crypto_key);
 

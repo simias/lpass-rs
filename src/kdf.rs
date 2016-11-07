@@ -24,7 +24,7 @@ pub fn login_key(username: &str,
     }
 
     let decrypt_key =
-        try!(decryption_key(username, password, iterations));
+        try!(crypto_key(username, password, iterations));
 
     let mut login_key = try!(SecureStorage::from_vec(vec![0; 32]));
 
@@ -37,11 +37,11 @@ pub fn login_key(username: &str,
     Ok(login_key)
 }
 
-/// Key used to decipher the crypted blobs. This key is never sent to
-/// the server.
-pub fn decryption_key(username: &str,
-                      password: &[u8],
-                      iterations: u32) -> Result<SecureStorage> {
+/// Key used to crypt and decrypt the data blobs. This key is never
+/// sent to the server.
+pub fn crypto_key(username: &str,
+                  password: &[u8],
+                  iterations: u32) -> Result<SecureStorage> {
 
     // The C client doesn't do that but it's probably not a good idea
     // to work with a very low number of iterations. The C client has
