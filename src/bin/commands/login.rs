@@ -69,8 +69,6 @@ pub fn login(options: &Matches) -> Result<()> {
             try!(password::prompt("Master password", &desc, None));
 
         try!(session.login(password, trust, otp_query));
-
-        break;
     }
 
     Ok(())

@@ -23,7 +23,7 @@ pub fn login_key(username: &str,
         return Err(Error::Unsupported(err));
     }
 
-    let mut decrypt_key =
+    let decrypt_key =
         try!(decryption_key(username, password, iterations));
 
     let mut login_key = try!(SecureStorage::from_vec(vec![0; 32]));

@@ -36,6 +36,16 @@ pub struct Session {
     server: String,
     /// Number of iterations for the key derivation functions
     iterations: Option<u32>,
+    /// User ID
+    uid: Option<u32>,
+    /// Session ID
+    session_id: Option<SecureStorage>,
+    /// Session token
+    session_token: Option<SecureStorage>,
+    /// Key derived from the master password and used to encrypt and
+    /// decrypt the data. This is not the same as the key used to log
+    /// into the server.
+    crypto_key: Option<SecureStorage>,
 }
 
 impl Session {
@@ -50,12 +60,16 @@ impl Session {
             username: username.to_lowercase(),
             server: "lastpass.com".to_owned(),
             iterations: None,
+            uid: None,
+            session_id: None,
+            session_token: None,
+            crypto_key: None,
         }
     }
 
     /// Return `true` if the session is authenticated on the server.
     pub fn is_authenticated(&self) -> bool {
-        false
+        self.session_id.is_some() && self.session_token.is_some()
     }
 
     /// Return the server name used by this session.
@@ -142,6 +156,7 @@ impl Session {
             (b"username", username.as_bytes()),
             (b"hash", &hex_key),
             (b"iterations", iter_str.as_bytes()),
+            // XXX not implemented
             (b"includeprivatekeyenc", b"1"),
             (b"method", b"cli"),
             // XXX not implemented
@@ -155,7 +170,7 @@ impl Session {
             let otp =
                 match otp_prompt(m) {
                     Some(o) => o,
-                    None => return res,
+                    None => return Err(Error::OtpRequired(m)),
                 };
 
             let mut params = params.to_owned();
@@ -165,22 +180,25 @@ impl Session {
             res = self.try_login(&params);
         }
 
-        res
+        let crypto_key =
+            try!(kdf::decryption_key(&self.username(), &password, iterations));
+
+        self.crypto_key = Some(crypto_key);
+
+        Ok(())
     }
 
     fn try_login(&mut self, params: &[(&[u8], &[u8])]) -> Result<()> {
         let response =
             try!(self.post("login.php", params));
 
-        println!("{}", String::from_utf8_lossy(&response));
-
         let xml =
             try!(xml::Dom::parse(&response as &[u8]));
 
         let bad_xml = Error::BadProtocol("Invalid XML received".to_owned());
 
-        if let Some(_) = xml.element(&["response", "ok"]) {
-            unimplemented!()
+        if let Some(ok) = xml.element(&["response", "ok"]) {
+            self.finalize_login(ok)
         } else if let Some(e) = xml.element(&["response", "error"]) {
             let cause: &str =
                 match e.attribute("cause") {
@@ -214,6 +232,31 @@ impl Session {
         } else {
             Err(bad_xml)
         }
+    }
+
+    fn finalize_login(&mut self, ok_node: &xml::Element) -> Result<()> {
+        let get_attrib = |attr| {
+            match ok_node.attribute(attr) {
+                Some(v) => Ok(v.value.clone()),
+                None => {
+                    let err = format!("Missing XML attribute '{}'", attr);
+                    Err(Error::BadProtocol(err))
+                }
+            }
+        };
+
+        let uid = try!(get_attrib("uid"));
+        let session_id = try!(get_attrib("sessionid")).into_bytes();
+        let token = try!(get_attrib("token")).into_bytes();
+        // XXX We don't need that for the moment, it's the RSA private
+        // key used to handle shares.
+        let _private_key_enc = try!(get_attrib("privatekeyenc")).into_bytes();
+
+        self.uid = Some(try!(u32::from_str(&uid)));
+        self.session_id = Some(try!(SecureStorage::from_vec(session_id)));
+        self.session_token = Some(try!(SecureStorage::from_vec(token)));
+
+        Ok(())
     }
 
     fn post(&self,
