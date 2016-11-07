@@ -1,6 +1,7 @@
 use libc;
 
 use std::ops::{Deref, DerefMut, Drop};
+use std::cmp::{PartialEq, Eq};
 use std::io;
 
 use error::Result;
@@ -119,6 +120,17 @@ impl DerefMut for Storage {
         &mut self.storage[0..self.len]
     }
 }
+
+impl PartialEq for Storage {
+    fn eq(&self, other: &Storage) -> bool {
+        self.len() == other.len() &&
+            self.iter()
+            .zip(other.iter())
+            .all(|(&a, &b)| a == b)
+    }
+}
+
+impl Eq for Storage {}
 
 fn mlock(s: &[u8]) -> Result<()> {
     if s.is_empty() {
